@@ -1,3 +1,5 @@
+import subDays from 'date-fns/subDays'
+
 export type Thumbnail = {
   height: number
   url: string
@@ -42,6 +44,7 @@ export type Video = {
 export async function* getVideosByChannelId(
   id: string
 ): AsyncIterableIterator<Video> {
+  let date = new Date()
   let pageToken = ''
 
   while (true) {
@@ -52,13 +55,15 @@ export async function* getVideosByChannelId(
     apiUrl.searchParams.set('order', 'date')
     apiUrl.searchParams.set('pageToken', pageToken)
     apiUrl.searchParams.set('part', 'snippet')
+    apiUrl.searchParams.set('publishedAfter', subDays(date, 60).toISOString())
+    apiUrl.searchParams.set('publishedBefore', date.toISOString())
     apiUrl.searchParams.set('type', 'video')
 
     const response = await fetch(apiUrl.toString())
       .then(response => response.json())
       .catch(() => null)
 
-    if (!response || response.error || response.items.length < 1) break
+    if (!response || response.error || (!pageToken && response.items.length < 1)) break
 
     for (const item of response.items) {
       yield {
@@ -67,9 +72,11 @@ export async function* getVideosByChannelId(
       }
     }
 
-    if (!response.nextPageToken) break
+    pageToken = response.nextPageToken || ''
 
-    pageToken = response.nextPageToken
+    if (!response.nextPageToken) {
+      date = subDays(date, 60)
+    }
 
     await new Promise(resolve => setTimeout(resolve, 2000))
   }
